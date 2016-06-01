@@ -105,10 +105,10 @@ Below is the binary representation of our first tick. But we can do way better!
 
 ## Switching from Double to Int
 
-The fact that a price is only represented up to a given precision makes it possible for use to eliminate our 
+The fact that a price is only represented up to a given precision makes it possible for us to eliminate our 
 double values and use plain old integers instead. 
 
-Prices have a precision up to the fifth decimal place. 
+Prices can have a precision up to the fifth decimal place. 
 As a consequence, we can use the factor `100.000` to multiply our `Double` and get an `Int` without loosing information. 
 Let's define a new version for our ticks as `FactorizedTick` and some methods to easily switch between them.
 
@@ -141,7 +141,7 @@ method in comparison to the CSV version! Again, this is the binary representatio
 
 Instead of storing each tick on it's own, we can make use of the fact that we want to safe an ordered series of ticks.
 We only have to encode the first tick as usual. Every subsequent tick can be represented as the 
-difference to the previous one.
+difference to the previous one. This method is called [Delta encoding](https://en.wikipedia.org/wiki/Delta_encoding).
   
 ```tut:book
 case class FactorizedDeltaTick(timeDelta: Long, bidDelta: Int, askDelta: Int)
@@ -167,7 +167,7 @@ which is 99 milliseconds later, a `16 = 0,00016` higher bid price and
 a `14 = ,00014` higher ask price. Sadly, we still need 128 bits to encode our delta, 
 since every price difference is represented by 32 bits. 
 
-This is where we can use varints or *variable length encoded* integers. 
+This is where we can use [varints](http://usulusuldan.blogspot.de/2013/02/varints.html) or *variable length encoded* integers. 
 Each byte in a varint, except the last byte, has the most significant bit set. 
 In other terms, the highest bit of each byte encodes whether the next byte belongs to the current number. 
 All other remaining 7 bits are used to hold the value itself. This makes it possible to decode an int with only 1 or up to 5 bytes, depending on the size of the number. 
@@ -258,11 +258,11 @@ Here is the final binary representation for our codec.
 
 ## Conclusion
 
-By developing our own binary protocol to store stock prices as ordered time series, we could improve
+By developing our own binary protocol to store stock prices as ordered time series, we were able to improve
 the storage efficiency by nearly 90%. We started with 232 bits for one tick in CSV format and improved
- the storage needed step by step. We started with storing integers instead of double values. After that, we switched to delta
- encoding in combination with variable length encoded integers to make use of the small price changes for each change.
-Whenever we have structured data and we care about efficient memory usage, it makes sense to use libraries like Scodec
+ the storage needed step by step. The first step was storing integers instead of double values. After that, we switched to *delta
+ encoding* in combination with *variable length encoded integers* to make use of the small price changes for each price update.
+Whenever we have structured data and we care about efficient memory usage, it makes sense to consider building your own binary file protocol by using easy libraries like Scodec
  to represent your own codec.
  
 In the next part of this series, we will use Akka Streams to build a Source and a Sink to read and write huge files 
