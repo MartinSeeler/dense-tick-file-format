@@ -35,8 +35,8 @@ import bits._
 import codecs._
 ```
 
-Let's start by encoding an `Int` into a `BitVector`. To do this, we need a `Codec[Int]`. 
-Gladfully, Scodec comes with a big number of predefined codecs, so we don't have to implement everything by our self. We can 
+Let's start by encoding an `Int` into a `BitVector`. To do this, we need a `Codec[Int]`.
+Fortunately, Scodec comes with a big number of predefined codecs, so we don't have to implement everything by our self. We can
 use `scodec.codecs.int32` do achieve what we want. Here is how to use it.
 
 ```tut:book
@@ -78,15 +78,15 @@ case class Tick(time: Long, bid: Double, ask: Double)
 
 The most trivial way to encode and store our ticks is using a comma or tab separated file.
 It is easy to understand and can be used with a lot of applications, which makes it useful for all
-these Excel evangelists and paper traders out there.
+those Excel evangelists and paper traders out there.
 
 ```tut:book
 utf8 encode "1420148801108,1.20989,1.21049"
 ```
 
 Looking at the output, we can see that one tick is encoded with 232 bits. For our 1 million tick file,
-we can estimate a `232 * 1000000 / 8 / 1024 / 1024 = 27,65` MB file as a result. We will use this number as our 
-base line and see, how much we can improve this number.
+we can estimate a `232 * 1000000 / 8 / 1024 / 1024 = 27,65` MB file as a result. We will use this number as our
+baseline and see, how much we can improve this number.
 
 ## Implementing our first codec
 
@@ -108,8 +108,8 @@ Below is the binary representation of our first tick. But we can do way better!
 The fact that a price is only represented up to a given precision makes it possible for us to eliminate our 
 double values and use plain old integers instead. 
 
-Prices can have a precision up to the fifth decimal place. 
-As a consequence, we can use the factor `100.000` to multiply our `Double` and get an `Int` without loosing information. 
+Prices can have a precision up to the fifth decimal place.
+As a consequence, we can use the factor `100.000` to multiply our `Double` and get an `Int` without losing information.
 Let's define a new version for our ticks as `FactorizedTick` and some methods to easily switch between them.
 
 ```tut:book
@@ -139,8 +139,8 @@ method in comparison to the CSV version! Again, this is the binary representatio
   
 ## Using delta encoding and Varints
 
-Instead of storing each tick on it's own, we can make use of the fact that we want to safe an ordered series of ticks.
-We only have to encode the first tick as usual. Every subsequent tick can be represented as the 
+Instead of storing each tick on its own, we can make use of the fact that we want to save an ordered series of ticks.
+We only have to encode the first tick as usual. Every subsequent tick can be represented as the
 difference to the previous one. This method is called [Delta encoding](https://en.wikipedia.org/wiki/Delta_encoding).
   
 ```tut:book
@@ -194,7 +194,7 @@ int32 encode 2147483647
 vint encode 2147483647
 ```
 
-As we can see, small numbers are stored very efficient. The following is the new codec for our `FactorizedDeltaTick` case 
+As we can see, small numbers are stored very efficiently. The following is the new codec for our `FactorizedDeltaTick` case
 class using `vint` and `vlong`.
 
 ```tut:book
@@ -202,13 +202,13 @@ val factorizedDeltaTickCodecV = (vlong :: vint :: vint).as[FactorizedDeltaTick]
 factorizedDeltaTickCodecV encode delta
 ```
 
-This time, we reduced the memory consumption big times! Only 24 bits are needed to store our delta to the previous tick.
-Of course this will not work every time. Since we only have 7 of 8 bits available in our `vint`, we can only represent numbers from 0 to 127 with one byte. 
+This time, we reduced the memory consumption big time! Only 24 bits are needed to store our delta to the previous tick.
+Of course this will not work every time. Since we only have 7 of 8 bits available in our `vint`, we can only represent numbers from 0 to 127 with one byte.
 When the price or time deltas are greater than 127, we need another byte. The following is the binary representation of our efficient delta tick.
  
 ![Delta Codec](img/posts/dtff/codec-3.png) 
 
-So varints seems to be the holy grail to store stock prices. The truth is, this is only the case when the price changes upwards. Representing negative 
+So varints seem to be the holy grail to store stock prices. The truth is, this is only the case when the price changes upwards. Representing negative
 numbers, in our case a decreasing price delta, needs exactly 5 bytes. This is because the most significant bit
 is used to indicate if the next byte is related to the current number, leaving us with only 7 bits remaining for our value. 
 Therefore, 5 bytes are needed to represent negative numbers, even for small numbers.
@@ -223,9 +223,9 @@ factorizedDeltaTickCodec encode negativeDelta
 What a wonderful world would it be when prices would only move upwards. In reality, prices move up and down all the time.
 Even tough there is another way to store small positive and also negative numbers, which is called 
 [ZigZag encoding](https://developers.google.com/protocol-buffers/docs/encoding#signed-integers), we will use a more trivial way to fix this issue.
-We can use one bit to indicate, whether the next delta is positive (0) or negative (1) and then storing only the absolute value. Here is the case class and the codec for this 
-non negative delta class.
- 
+We can use one bit to indicate, whether the next delta is positive (0) or negative (1) and then storing only the absolute value. Here is the case class and the codec for this
+non-negative delta class.
+
 ```tut:book
 case class NonNegativeFactorizedDeltaTick(timeDelta: Long, bidDeltaNeg: Boolean, bidDelta: Int, askDeltaNeg: Boolean, askDelta: Int)
 val nonNegFactorizedDeltaTickCodecV = (vlong :: bool :: vint :: bool :: vint).as[NonNegativeFactorizedDeltaTick]
@@ -244,13 +244,13 @@ implicit class FactorizedDeltaTickOps(private val wrappedFactorizedDeltaTick: Fa
 val nonNegativeDelta = negativeDelta.nonNegative
 nonNegFactorizedDeltaTickCodecV encode nonNegativeDelta
 ```
- 
-Now we've got it. Even negative deltas can now be stored very efficient using varints. We did increase 
-the minimum size from 24 to 26 bits with our two bits as negative indicators, but we decreased the overall 
-storage needed for up and down movements. Expecting evenly distributed up and down moves, we decreased 
-our average storage space from 77 bits (26 bits for positives and 128 bits for negatives) down to just 26 bits! 
-This makes it possible to store 1 million ticks inside an approximately `26 * 1000000 / 8 / 1024 / 1024 = 3,1` MB file, 
-which is a decrease of 88,79% for the total file size in comparison to the CSV approach! 
+
+Now we've got it. Even negative deltas can now be stored very efficiently using varints. We did increase
+the minimum size from 24 to 26 bits with our two bits as negative indicators, but we decreased the overall
+storage needed for up and down movements. Expecting evenly distributed up and down moves, we decreased
+our average storage space from 77 bits (26 bits for positives and 128 bits for negatives) down to just 26 bits!
+This makes it possible to store 1 million ticks inside an approximately `26 * 1000000 / 8 / 1024 / 1024 = 3,1` MB file,
+which is a decrease of 88,79% for the total file size in comparison to the CSV approach!
 
 Here is the final binary representation for our codec.
 
