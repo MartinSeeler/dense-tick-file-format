@@ -48,7 +48,7 @@ class ByteStringToDeltaStage extends GraphStage[FlowShape[ByteString, Factorized
         private[this] var remainingBits = BitVector.empty
 
         def onPush(): Unit = {
-          val bits = BitVector.apply(grab(in).asByteBuffer)
+          val bits = BitVector.view(grab(in).asByteBuffer)
           val (results, rest) = decodeAllFromBits(remainingBits ++ bits)
           emitMultiple(out, results.map(_.withNegatives))
           remainingBits = rest
