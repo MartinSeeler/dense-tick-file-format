@@ -24,7 +24,7 @@ class DeltaToByteStringStage extends GraphStage[FlowShape[FactorizedDeltaTick, B
       def onPush(): Unit = {
         val delta = grab(in)
         nonNegFactorizedDeltaTickCodecV.encode(delta.nonNegative) match {
-          case Successful(x) => emit(out, ByteString(x.toByteArray))
+          case Successful(x) => emit(out, ByteString(x.toByteBuffer))
           case Failure(err) => fail(out, new Exception(err.messageWithContext))
         }
       }
