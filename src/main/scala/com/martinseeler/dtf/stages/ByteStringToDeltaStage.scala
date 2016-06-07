@@ -3,7 +3,7 @@ package com.martinseeler.dtf.stages
 import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
 import akka.stream.{Attributes, FlowShape, Inlet, Outlet}
 import akka.util.ByteString
-import com.martinseeler.dtf.FactorizedDeltaTick
+import com.martinseeler.dtf.{FactorizedDeltaTick, NonNegativeFactorizedDeltaTick}
 import scodec.Attempt.{Failure, Successful}
 import scodec.DecodeResult
 import scodec.bits.BitVector
@@ -25,20 +25,16 @@ class ByteStringToDeltaStage extends GraphStage[FlowShape[ByteString, Factorized
 
       val inHandler = new InHandler {
 
-        def decodeAllFromBits(bits: BitVector): (Vector[FactorizedDeltaTick], BitVector) = {
+        def decodeAllFromBits(bits: BitVector): (Vector[NonNegativeFactorizedDeltaTick], BitVector) = {
 
           @tailrec
-          def compute(results: Vector[FactorizedDeltaTick], remainingBits: BitVector): (Vector[FactorizedDeltaTick], BitVector) = {
-            FactorizedDeltaTick.factorizedDeltaTickCodecV.decode(remainingBits) match {
+          def compute(results: Vector[NonNegativeFactorizedDeltaTick], remainingBits: BitVector): (Vector[NonNegativeFactorizedDeltaTick], BitVector) = {
+            NonNegativeFactorizedDeltaTick.nonNegFactorizedDeltaTickCodecV.decode(remainingBits) match {
               case Successful(DecodeResult(value, BitVector.empty)) =>
-                (results, BitVector.empty)
-              case Successful(DecodeResult(value, remainder)) if remainder.sizeGreaterThan(24) =>
-//                println("value = " + value)
-//                println("remainder = " + remainder)
+                (results :+ value, BitVector.empty)
+              case Successful(DecodeResult(value, remainder)) if remainder.sizeGreaterThan(25) =>
                 compute(results :+ value, remainder)
               case Successful(DecodeResult(value, remainder)) =>
-//                println("value = " + value)
-//                println("remainder = " + remainder)
                 (results :+ value, remainder)
               case Failure(e) =>
                 println("e = " + e)
@@ -54,7 +50,7 @@ class ByteStringToDeltaStage extends GraphStage[FlowShape[ByteString, Factorized
         def onPush(): Unit = {
           val bits = BitVector.apply(grab(in).asByteBuffer)
           val (results, rest) = decodeAllFromBits(remainingBits ++ bits)
-          emitMultiple(out, results)
+          emitMultiple(out, results.map(_.withNegatives))
           remainingBits = rest
         }
       }
