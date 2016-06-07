@@ -35,5 +35,5 @@ case class NonNegativeFactorizedDeltaTick(timeDelta: Long, bidDeltaNeg: Boolean,
 object NonNegativeFactorizedDeltaTick {
 
   val nonNegFactorizedDeltaTickCodec: Codec[NonNegativeFactorizedDeltaTick] = (long(64) :: bool :: int32 :: bool :: int32).as[NonNegativeFactorizedDeltaTick]
-  val nonNegFactorizedDeltaTickCodecV: Codec[NonNegativeFactorizedDeltaTick] = (vlong :: bool :: vint :: bool :: vint).as[NonNegativeFactorizedDeltaTick]
+  val nonNegFactorizedDeltaTickCodecV: Codec[NonNegativeFactorizedDeltaTick] = byteAligned(vlong :: bool :: vint :: bool :: vint).as[NonNegativeFactorizedDeltaTick]
 }
